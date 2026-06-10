@@ -26,41 +26,57 @@
     </div>
 
     <script>
-        const BROKER = "test.mosquitto.org";
-        const PORT = 8081;   // plain WebSocket port (not 8081)
+        // ---- CONFIG ----
+        const BROKER = "broker.hivemq.com";
+        const PORT = 8884;          // Secure WebSocket port (wss)
+        // ----------------
 
         let client;
         let currentRoom;
 
         function join() {
-    currentRoom = document.getElementById('roomInput').value.trim().toUpperCase();
-    if (!currentRoom) return;
-    client = new Paho.MQTT.Client(BROKER, PORT, "receiver-" + Math.random().toString(36).slice(2));
-    client.onConnectionLost = () => {
-        document.getElementById('messages').innerHTML += "<div>--- disconnected ---</div>";
-    };
-    client.onMessageArrived = (msg) => {
-        const text = msg.payloadString;
-        const div = document.createElement('div');
-        div.textContent = "anon: " + text;
-        document.getElementById('messages').appendChild(div);
-        setTimeout(() => div.remove(), 5000);
-    };
-    client.useSSL = true;   // <--- ADD THIS LINE
-    client.connect({
-        onSuccess: () => {
-            client.subscribe(currentRoom + "/laptop");
-            document.getElementById('login').style.display = 'none';
-            document.getElementById('chat').style.display = 'block';
+            currentRoom = document.getElementById('roomInput').value.trim().toUpperCase();
+            if (!currentRoom) return;
+
+            // Create a unique client ID so the broker doesn't confuse tabs
+            const clientId = "receiver-" + Math.random().toString(36).slice(2);
+            client = new Paho.MQTT.Client(BROKER, PORT, clientId);
+
+            client.onConnectionLost = () => {
+                document.getElementById('messages').innerHTML += "<div>--- disconnected ---</div>";
+            };
+
+            client.onMessageArrived = (msg) => {
+                const text = msg.payloadString;
+                const div = document.createElement('div');
+                div.textContent = "anon: " + text;
+                document.getElementById('messages').appendChild(div);
+                // Auto-remove after 5 seconds
+                setTimeout(() => div.remove(), 5000);
+            };
+
+            // Tell the library to use encrypted WebSocket (wss://)
+            client.useSSL = true;
+
+            client.connect({
+                onSuccess: () => {
+                    // Subscribe to the topic where the laptop sends messages
+                    client.subscribe(currentRoom + "/laptop");
+                    document.getElementById('login').style.display = 'none';
+                    document.getElementById('chat').style.display = 'block';
+                },
+                onFailure: (err) => {
+                    console.error("Connection failed:", err.errorMessage);
+                    alert("Connection failed. Check console or try another broker.");
+                }
+            });
         }
-    });
-}
 
         function send() {
             const text = document.getElementById('msgInput').value;
             if (!text || !currentRoom) return;
             const msg = new Paho.MQTT.Message(text);
-            msg.destinationName = currentRoom + "/phone";
+            msg.destinationName = currentRoom + "/phone";   // send back to the laptop
             client.send(msg);
             document.getElementById('msgInput').value = '';
         }
