@@ -17,6 +17,7 @@
         <p>Room code:</p>
         <input id="roomInput" placeholder="e.g. XKCD-42">
         <button onclick="join()">Join</button>
+        <p id="status"></p>
     </div>
     <div id="chat" style="display:none">
         <div id="messages"></div>
@@ -26,10 +27,13 @@
     </div>
 
     <script>
-        // ---- CONFIG ----
-        const BROKER = "broker.hivemq.com";
-        const PORT = 8884;          // Secure WebSocket port (wss)
-        // ----------------
+        // ------------------------------------------------------------
+        //  CONFIG – only change these if you ever switch brokers
+        // ------------------------------------------------------------
+        const BROKER_HOST = "broker.hivemq.com";
+        const BROKER_WSS_PORT = 8884;          // WebSocket Secure port
+        const BROKER_WSS_PATH = "/mqtt";       // standard MQTT WebSocket path
+        // ------------------------------------------------------------
 
         let client;
         let currentRoom;
@@ -38,9 +42,12 @@
             currentRoom = document.getElementById('roomInput').value.trim().toUpperCase();
             if (!currentRoom) return;
 
-            // Create a unique client ID so the broker doesn't confuse tabs
+            // Build the full wss:// URI directly – this is what the browser needs
+            const uri = "wss://" + BROKER_HOST + ":" + BROKER_WSS_PORT + BROKER_WSS_PATH;
             const clientId = "receiver-" + Math.random().toString(36).slice(2);
-            client = new Paho.MQTT.Client(BROKER, PORT, clientId);
+
+            // Create client with the host/port (it will be overridden by the hosts option)
+            client = new Paho.MQTT.Client(BROKER_HOST, BROKER_WSS_PORT, clientId);
 
             client.onConnectionLost = () => {
                 document.getElementById('messages').innerHTML += "<div>--- disconnected ---</div>";
@@ -55,19 +62,18 @@
                 setTimeout(() => div.remove(), 5000);
             };
 
-            // Tell the library to use encrypted WebSocket (wss://)
-            client.useSSL = true;
-
+            // Connect with explicit hosts array – forces wss://
             client.connect({
+                hosts: [uri],
                 onSuccess: () => {
-                    // Subscribe to the topic where the laptop sends messages
+                    document.getElementById('status').innerText = "Connected!";
                     client.subscribe(currentRoom + "/laptop");
                     document.getElementById('login').style.display = 'none';
                     document.getElementById('chat').style.display = 'block';
                 },
                 onFailure: (err) => {
-                    console.error("Connection failed:", err.errorMessage);
-                    alert("Connection failed. Check console or try another broker.");
+                    document.getElementById('status').innerText = "Connection failed: " + err.errorMessage;
+                    console.error("Connection failed", err);
                 }
             });
         }
@@ -76,7 +82,7 @@
             const text = document.getElementById('msgInput').value;
             if (!text || !currentRoom) return;
             const msg = new Paho.MQTT.Message(text);
-            msg.destinationName = currentRoom + "/phone";   // send back to the laptop
+            msg.destinationName = currentRoom + "/phone";
             client.send(msg);
             document.getElementById('msgInput').value = '';
         }
@@ -86,6 +92,7 @@
             document.getElementById('chat').style.display = 'none';
             document.getElementById('login').style.display = 'block';
             document.getElementById('messages').innerHTML = '';
+            document.getElementById('status').innerText = '';
         }
     </script>
 </body>
