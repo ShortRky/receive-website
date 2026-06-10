@@ -27,14 +27,14 @@
 
     <script>
         const BROKER = "test.mosquitto.org";
-        const PORT = 8081;   // WebSocket port
+        const PORT = 8080;   // plain WebSocket port (not 8081)
+
         let client;
         let currentRoom;
 
         function join() {
             currentRoom = document.getElementById('roomInput').value.trim().toUpperCase();
             if (!currentRoom) return;
-            // Create a unique client ID
             client = new Paho.MQTT.Client(BROKER, PORT, "receiver-" + Math.random().toString(36).slice(2));
             client.onConnectionLost = () => {
                 document.getElementById('messages').innerHTML += "<div>--- disconnected ---</div>";
@@ -44,7 +44,6 @@
                 const div = document.createElement('div');
                 div.textContent = "anon: " + text;
                 document.getElementById('messages').appendChild(div);
-                // Auto-remove after 5 seconds
                 setTimeout(() => div.remove(), 5000);
             };
             client.connect({
