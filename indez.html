@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TempChat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        body { background:#111; color:#0f0; font-family:monospace; padding:10px; }
+        #messages { height:80vh; overflow-y:auto; white-space:pre-wrap; }
+        input { background:#222; color:#0f0; border:1px solid #0f0; padding:5px; width:70%; }
+        button { background:#222; color:#0f0; border:1px solid #0f0; padding:5px; }
+    </style>
+</head>
+<body>
+    <div id="login">
+        <p>Room code:</p>
+        <input id="roomInput" placeholder="e.g. XKCD-42">
+        <button onclick="join()">Join</button>
+    </div>
+    <div id="chat" style="display:none">
+        <div id="messages"></div>
+        <input id="msgInput" placeholder="Type..." autofocus>
+        <button onclick="send()">Send</button>
+        <button onclick="leave()">Leave</button>
+    </div>
+
+    <script>
+        const BROKER = "test.mosquitto.org";
+        const PORT = 8081;   // WebSocket port
+        let client;
+        let currentRoom;
+
+        function join() {
+            currentRoom = document.getElementById('roomInput').value.trim().toUpperCase();
+            if (!currentRoom) return;
+            // Create a unique client ID
+            client = new Paho.MQTT.Client(BROKER, PORT, "receiver-" + Math.random().toString(36).slice(2));
+            client.onConnectionLost = () => {
+                document.getElementById('messages').innerHTML += "<div>--- disconnected ---</div>";
+            };
+            client.onMessageArrived = (msg) => {
+                const text = msg.payloadString;
+                const div = document.createElement('div');
+                div.textContent = "anon: " + text;
+                document.getElementById('messages').appendChild(div);
+                // Auto-remove after 5 seconds
+                setTimeout(() => div.remove(), 5000);
+            };
+            client.connect({
+                onSuccess: () => {
+                    client.subscribe(currentRoom + "/laptop");
+                    document.getElementById('login').style.display = 'none';
+                    document.getElementById('chat').style.display = 'block';
+                }
+            });
+        }
+
+        function send() {
+            const text = document.getElementById('msgInput').value;
+            if (!text || !currentRoom) return;
+            const msg = new Paho.MQTT.Message(text);
+            msg.destinationName = currentRoom + "/phone";
+            client.send(msg);
+            document.getElementById('msgInput').value = '';
+        }
+
+        function leave() {
+            if (client) client.disconnect();
+            document.getElementById('chat').style.display = 'none';
+            document.getElementById('login').style.display = 'block';
+            document.getElementById('messages').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
